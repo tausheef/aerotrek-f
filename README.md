@@ -1,73 +1,112 @@
-# React + TypeScript + Vite
+# AeroTrek Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AeroTrek is a React + TypeScript web application for international shipment management and tracking. It includes a public landing page, user authentication, KYC verification, shipment booking/tracking, wallet management, and an admin dashboard.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + TypeScript 5 |
+| Build Tool | Vite 5 |
+| Styling | Tailwind CSS 3.4 |
+| Routing | React Router 6 |
+| State | Zustand 4 (auth) |
+| Server State | TanStack React Query 5 |
+| Forms | React Hook Form 7 + Zod |
+| HTTP | Axios with JWT interceptors |
+| Icons | Lucide React |
 
-## React Compiler
+## Project Structure
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── api/            # Axios instance + endpoint wrappers (auth, shipments, user, cms)
+├── components/
+│   ├── landing/    # Public homepage sections (Hero, Navbar, Footer, FAQ, etc.)
+│   ├── dashboard/  # Dashboard layout wrapper
+│   └── shared/     # Reusable UI (PageLoader, ToastContainer)
+├── pages/
+│   ├── dashboard/  # User pages (MyShipments, BookShipment, Track, Wallet, Profile, KYC, Addresses)
+│   └── admin/      # Admin pages (Dashboard, KYC Management, CMS Manager, All Shipments)
+├── router/         # Route tree with ProtectedRoute, AdminRoute, GuestRoute guards
+├── store/          # Zustand stores (authStore, uiStore)
+├── types/          # TypeScript interfaces (User, Shipment, KYC, Wallet, Blog, etc.)
+├── hooks/          # Custom React hooks
+└── utils/          # Utility fn
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Getting Started
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Node.js 18+
+- A running backend API (see `.env` setup below)
+
+### Installation
+
+```bash
+npm install
 ```
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+VITE_API_BASE_URL=http://your-backend-url/api/v1
+```
+
+### Development
+
+```bash
+npm run dev
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+### Preview Production Build
+
+```bash
+npm run preview
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## Features
+
+- **Public** — Landing page, blog, public shipment tracking
+- **Auth** — Registration, login, JWT-based session persistence
+- **KYC** — Identity verification flow for individuals and companies
+- **Shipments** — Book, track, and manage international shipments
+- **Wallet** — Balance management and transaction history
+- **Address Book** — Saved sender/recipient addresses
+- **Admin** — KYC approval, shipment oversight, CMS content manager
+
+## Route Guards
+
+| Guard | Description |
+|---|---|
+| `ProtectedRoute` | Requires authenticated user |
+| `AdminRoute` | Requires admin role |
+| `GuestRoute` | Redirects authenticated users away (login/register) |
+
+## Design Tokens
+
+The Tailwind config defines a custom brand palette:
+
+| Token | Value | Usage |
+|---|---|---|
+| `sky` | `#00BFFF` | Primary accent |
+| `navy` | `#0D0D0D` | Dark backgrounds |
+| `cream` | `#F0EDE8` | Light surfaces |
+
+Custom animations: `fade-up`, `fade-in`, `marquee`.  
+Custom shadows: `sky-glow`, `dark-card`.
