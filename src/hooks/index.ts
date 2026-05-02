@@ -3,14 +3,15 @@ import { useAuthStore } from '../store/authStore'
 import { useToastStore } from '../store/uiStore'
 import { authApi } from '../api/auth'
 import { userApi } from '../api/user'
-import { kycApi, walletApi, ratesApi, shipmentsApi, trackingApi } from '../api/shipments'
+import { kycApi, walletApi, ratesApi, shipmentsApi, trackingApi, manualBook } from '../api/shipments'
 import { cmsApi } from '../api/cms'
 import type {
   LoginPayload, RegisterPayload,
   AddressPayload, KycSubmitPayload,
   RechargePayload, RateCalculatePayload,
-  BookShipmentPayload, SiteSettings,
+  BookShipmentPayload, ManualBookingPayload,
 } from '../types'
+import { DEFAULT_CMS } from '../utils'
 
 // ── useAuth ──────────────────────────────────────────────────────
 export function useAuth() {
@@ -51,7 +52,7 @@ export function useAuth() {
   return {
     user, token,
     isAuthenticated: isAuthenticated(),
-    isAdmin: isAdmin(),
+    isAdmin:         isAdmin(),
     login:           loginMutation.mutateAsync,
     register:        registerMutation.mutateAsync,
     logout:          logoutMutation.mutate,
@@ -82,7 +83,28 @@ export function useProfile() {
     onError: (err: any) => toast.error(err.response?.data?.message ?? 'Failed to update.'),
   })
 
-  return { ...query, update: updateMutation.mutateAsync, updating: updateMutation.isPending }
+  const uploadAvatarMutation = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('avatar', file)
+      return userApi.uploadAvatar(form)
+    },
+    onSuccess: (res: any) => {
+      const avatarUrl = res.data.avatar_url
+      const currentUser = useAuthStore.getState().user
+      if (currentUser) setUser({ ...currentUser, avatar_url: avatarUrl })
+      toast.success('Avatar updated.')
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Failed to upload avatar.'),
+  })
+
+  return {
+    ...query,
+    update:       updateMutation.mutateAsync,
+    updating:     updateMutation.isPending,
+    uploadAvatar: uploadAvatarMutation.mutateAsync,
+    uploading:    uploadAvatarMutation.isPending,
+  }
 }
 
 // ── useAddresses ─────────────────────────────────────────────────
@@ -139,29 +161,40 @@ export function useKyc() {
 
   const query = useQuery({
     queryKey: ['kyc'],
-    queryFn:  () => kycApi.get().then((r: any) => r.data.kyc),
+    queryFn:  () => kycApi.get().then((r: any) => r.data),
     staleTime: 60 * 1000,
   })
 
   const submitMutation = useMutation({
     mutationFn: (p: KycSubmitPayload) => kycApi.submit(p),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ['kyc'] })
-      toast.success('KYC submitted successfully.')
+      const user    = useAuthStore.getState().user
+      const setUser = useAuthStore.getState().setUser
+      if (user) setUser({ ...user, kyc_status: res.data.kyc?.status ?? user.kyc_status })
+      toast.success(res.data.message ?? 'KYC submitted.')
     },
     onError: (err: any) => toast.error(err.response?.data?.message ?? 'KYC submission failed.'),
   })
 
-  const kyc        = query.data
-  const isVerified = kyc?.status === 'verified' || kyc?.status === 'auto_verified'
-  const isPending  = kyc?.status === 'pending'
-  const isRejected = kyc?.status === 'rejected'
+  const data       = query.data
+  const kycStatus  = data?.kyc_status
+  const isVerified = kycStatus === 'verified'
+  const isPending  = kycStatus === 'pending'
+  const isRejected = kycStatus === 'rejected'
 
   return {
     ...query,
-    kyc, isVerified, isPending, isRejected,
-    submit:     submitMutation.mutateAsync,
-    submitting: submitMutation.isPending,
+    kycData:          data,
+    kyc:              data?.kyc ?? null,
+    kycStatus,
+    allowedDocuments: data?.allowed_documents ?? [],
+    accountType:      data?.account_type ?? 'individual',
+    isVerified,
+    isPending,
+    isRejected,
+    submit:           submitMutation.mutateAsync,
+    submitting:       submitMutation.isPending,
   }
 }
 
@@ -172,25 +205,29 @@ export function useWallet() {
 
   const balanceQuery = useQuery({
     queryKey: ['wallet'],
-    queryFn:  () => walletApi.getBalance().then((r: any) => r.data.wallet),
+    queryFn:  () => walletApi.getBalance().then((r: any) => r.data),
     staleTime: 30 * 1000,
   })
 
   const transactionsQuery = useQuery({
     queryKey: ['wallet-transactions'],
-    queryFn:  () => walletApi.getTransactions().then((r: any) => r.data.transactions),
+    queryFn:  () => walletApi.getTransactions().then((r: any) => r.data),
     staleTime: 30 * 1000,
   })
 
   const rechargeMutation = useMutation({
     mutationFn: (p: RechargePayload) => walletApi.recharge(p),
-    onSuccess:  (res: any) => { window.location.href = res.data.payment_url },
-    onError:    (err: any) => toast.error(err.response?.data?.message ?? 'Recharge failed.'),
+    onSuccess: (res: any) => {
+      const url = res.data.payment_url
+      if (url) window.location.href = url
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Recharge failed.'),
   })
 
   return {
-    wallet:        balanceQuery.data,
-    transactions:  transactionsQuery.data,
+    balance:       balanceQuery.data?.wallet_balance ?? 0,
+    currency:      balanceQuery.data?.currency ?? 'INR',
+    transactions:  transactionsQuery.data?.transactions,
     walletLoading: balanceQuery.isLoading,
     txLoading:     transactionsQuery.isLoading,
     recharge:      rechargeMutation.mutateAsync,
@@ -233,6 +270,19 @@ export function useShipment(id: string) {
   })
 }
 
+export function useManualBook() {
+  const qc    = useQueryClient()
+  const toast = useToastStore()
+
+  return useMutation({
+    mutationFn: (p: ManualBookingPayload) => manualBook(p),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shipments'] })
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Booking failed.'),
+  })
+}
+
 export function useBookShipment() {
   const qc    = useQueryClient()
   const toast = useToastStore()
@@ -248,36 +298,60 @@ export function useBookShipment() {
 }
 
 // ── useTracking ──────────────────────────────────────────────────
-export function useTracking(awb: string, enabled = true) {
+export function useTracking(identifier: string, enabled = true) {
   return useQuery({
-    queryKey: ['tracking', awb],
-    queryFn:  () => trackingApi.track(awb).then((r: any) => r.data.tracking),
-    enabled:  !!awb && enabled,
+    queryKey: ['tracking', identifier],
+    queryFn:  () => trackingApi.track(identifier).then((r: any) => r.data),
+    enabled:  !!identifier && enabled,
     staleTime: 60 * 1000,
   })
 }
 
-// ── useCmsSettings ───────────────────────────────────────────────
-function normalizeSettings(raw: Record<string, any>): SiteSettings {
+// ── CMS Settings — with JSON parse fix ───────────────────────────
+// Backend (MySQL) stores JSON values as strings sometimes
+// This function safely parses any value that should be array/object
+function safeParse(value: any, fallback: any): any {
+  if (value === null || value === undefined) return fallback
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed
+    } catch {
+      return fallback
+    }
+  }
+  // Already an object/array
+  if (typeof value === 'object') return value
+  return fallback
+}
+
+function normalizeSettings(raw: Record<string, any>) {
   return {
     ...raw,
+
+    // Text fields — direct
+    site_name:    raw.site_name    ?? DEFAULT_CMS.site_name,
     contact_email:   raw.site_email,
     contact_phone:   raw.site_phone,
     contact_address: raw.site_address,
+
+    // Social links
     social_links: {
       facebook:  raw.social_facebook,
       instagram: raw.social_instagram,
       twitter:   raw.social_twitter,
       linkedin:  raw.social_linkedin,
     },
-    landing_hero:         raw.landing_hero,
-    landing_stats:        raw.landing_stats,
-    landing_carriers:     raw.landing_carriers,
-    landing_features:     raw.landing_features,
-    landing_destinations: raw.landing_destinations,
-    landing_testimonials: raw.landing_testimonials,
-    landing_how_it_works: raw.landing_how_it_works,
-    landing_cta_banner:   raw.landing_cta_banner,
+
+    // Landing JSON sections — parse if string, fallback to defaults
+    landing_hero:         safeParse(raw.landing_hero,         DEFAULT_CMS.landing_hero),
+    landing_stats:        safeParse(raw.landing_stats,        DEFAULT_CMS.landing_stats),
+    landing_carriers:     safeParse(raw.landing_carriers,     DEFAULT_CMS.landing_carriers),
+    landing_features:     safeParse(raw.landing_features,     DEFAULT_CMS.landing_features),
+    landing_destinations: safeParse(raw.landing_destinations, DEFAULT_CMS.landing_destinations),
+    landing_testimonials: safeParse(raw.landing_testimonials, DEFAULT_CMS.landing_testimonials),
+    landing_how_it_works: safeParse(raw.landing_how_it_works, DEFAULT_CMS.landing_how_it_works),
+    landing_cta_banner:   safeParse(raw.landing_cta_banner,   DEFAULT_CMS.landing_cta_banner),
   }
 }
 

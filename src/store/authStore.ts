@@ -13,7 +13,6 @@ interface AuthState {
   clearAuth:   () => void
   setHydrated: (val: boolean) => void
 
-  // Derived helpers
   isAuthenticated: () => boolean
   isAdmin:         () => boolean
   isKycVerified:   () => boolean
@@ -41,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
 
       setHydrated: (val) => set({ isHydrated: val }),
 
-      // Uses is_admin boolean from User model
+      // is_admin boolean from User model
       isAuthenticated: () => !!get().token && !!get().user,
       isAdmin:         () => get().user?.is_admin === true,
       isKycVerified:   () => get().user?.kyc_status === 'verified',
@@ -49,10 +48,8 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'aerotrek-auth',
-      partialize: (state) => ({ user: state.user, token: state.token }),
-      onRehydrateStorage: () => (state) => {
-        state?.setHydrated(true)
-      },
+      partialize: (s) => ({ user: s.user, token: s.token }),
+      onRehydrateStorage: () => (state) => state?.setHydrated(true),
     }
   )
 )

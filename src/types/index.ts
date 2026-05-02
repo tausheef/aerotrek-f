@@ -1,17 +1,16 @@
-// ── User ─────────────────────────────────────────────────────────
+// ── User — MySQL + HasUuids ───────────────────────────────────────
 export interface User {
-  _id:            string
+  id:             string        // UUID (HasUuids trait)
   name:           string
   email:          string
   phone?:         string
   account_type:   'individual' | 'company'
   company_name?:  string
-  wallet_balance: number
   kyc_status:     'pending' | 'verified' | 'rejected'
   is_admin:       boolean
   email_verified: boolean
   phone_verified: boolean
-  avatar_url?:    string
+  avatar_url?:    string | null
   created_at:     string
   updated_at:     string
 }
@@ -41,16 +40,16 @@ export interface AuthResponse {
   expires_in:   number
 }
 
-// ── KYC ─────────────────────────────────────────────────────────
-export type KycStatus       = 'pending' | 'verified' | 'rejected' | 'auto_verified'
+// ── KYC — MySQL ──────────────────────────────────────────────────
+export type KycStatus       = 'pending' | 'verified' | 'rejected'
 export type KycDocumentType = 'aadhaar' | 'pan' | 'gst' | 'company_pan'
 
 export interface Kyc {
-  _id:               string
+  id:                string    // UUID
   user_id:           string
   account_type:      'individual' | 'company'
   document_type:     KycDocumentType
-  document_number?:  string
+  document_number:   string    // required in MySQL version
   document_image:    string
   status:            KycStatus
   rejection_reason?: string
@@ -60,36 +59,57 @@ export interface Kyc {
   updated_at:        string
 }
 
+// GET /kyc response
+export interface KycStatusResponse {
+  kyc_status:        KycStatus
+  account_type:      'individual' | 'company'
+  kyc:               Kyc | null
+  allowed_documents: KycDocumentType[]
+}
+
+// document_number is REQUIRED in MySQL version
 export interface KycSubmitPayload {
-  document_type:    KycDocumentType
-  document_number?: string
-  document_image:   File
+  document_type:   KycDocumentType
+  document_number: string        // required (min:5, max:30)
+  document_image:  File
 }
 
-// ── Wallet ───────────────────────────────────────────────────────
-export interface Wallet {
-  balance:  number
-  currency: string
+// ── Wallet — Bavix ───────────────────────────────────────────────
+// GET /wallet response
+export interface WalletBalance {
+  wallet_balance: number   // in rupees (already divided by 100)
+  currency:       'INR'
 }
 
-export type TransactionType = 'credit' | 'debit'
+// Transaction type from Bavix
+export type TransactionType = 'deposit' | 'withdraw'
 
+// GET /wallet/transactions — formatted by controller
 export interface WalletTransaction {
-  _id:           string
-  user_id:       string
-  type:          TransactionType
-  amount:        number
-  description:   string
-  reference?:    string
-  balance_after: number
-  created_at:    string
+  id:           string    // UUID
+  type:         TransactionType
+  amount:       number    // in rupees (already divided by 100)
+  description:  string | null
+  reference_id: string | null
+  gateway:      string | null
+  status:       'completed' | 'pending'
+  created_at:   string
 }
 
-export interface RechargePayload { amount: number }
+export interface RechargePayload {
+  amount: number  // min: 100, max: 100000
+}
+
+// POST /wallet/recharge response
+export interface RechargeResponse {
+  payment_url:    string
+  transaction_id?: string
+  [key: string]:  unknown
+}
 
 // ── Address ──────────────────────────────────────────────────────
 export interface Address {
-  _id:            string
+  id:             string    // UUID
   user_id:        string
   name:           string
   company?:       string
@@ -144,62 +164,145 @@ export interface Rate {
   volumetric_weight:   number
 }
 
-// ── Shipments ────────────────────────────────────────────────────
-export type ShipmentStatus = 'pending' | 'booked' | 'in_transit' | 'delivered' | 'failed'
+// ── Shipment Types ───────────────────────────────────────────────
+export type BookingType = 'auto' | 'manual'
 
-export interface ShipmentSender {
-  name: string; company?: string; phone: string; email?: string
-  address_line1: string; address_line2?: string
-  city: string; state: string; postcode: string; country: string
+export type ShipmentStatus =
+  | 'pending_acceptance'
+  | 'accepted'
+  | 'rejected'
+  | 'pending'
+  | 'booked'
+  | 'picked_up'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'failed'
+
+export interface ShipmentPackageItem {
+  length: number
+  width:  number
+  height: number
+  weight: number
 }
 
-export interface ShipmentReceiver {
-  name: string; company?: string; phone: string; email?: string
-  address_line1: string; address_line2?: string
-  city: string; state: string; postcode: string; country: string
+export interface ShipmentProductItem {
+  description: string
+  hsn_code:    string
+  qty:         number
+  unit_rate:   number
 }
 
-export interface ShipmentPackage {
-  weight: number; length: number; breadth: number; height: number
-  shipment_type: ShipmentType; package_count: number; goods_description?: string
+export interface TrackingEvent {
+  timestamp:   string
+  status:      string
+  description: string
+  location?:   string
 }
 
-export interface ShipmentProduct {
-  name: string; hsn_code?: string; value: number; quantity: number
-}
-
+// ── Shipment ─────────────────────────────────────────────────────
 export interface Shipment {
-  _id:             string
-  user_id:         string
+  id:          string       // UUID (MySQL + HasUuids)
+  aerotrek_id: string       // ATK-YYYYMMDD-XXXXXX
 
-  // ── New platform fields (added 2026-04-23) ──
-  aerotrek_id:     string | null  // ATK-YYYYMMDD-XXXXXX — primary display ID
-  platform:        string         // 'overseas' | 'shiprocket' | 'delhivery' etc.
-  platform_ref_id: string | null  // platform's own reference number
-  awb_no:          string | null  // actual carrier AWB (DHL/FedEx/UPS)
-  tracking_no:     string | null  // same as awb_no for now
+  // Platform fields — ADMIN ONLY, never show to users
+  platform?:        string
+  platform_ref_id?: string
 
-  // ── Legacy field — kept for backward compat ──
-  awb?:            string         // old field, use awb_no going forward
+  booking_type: BookingType
+  user_id:      string
+  status:       ShipmentStatus
+  goods_type:   'Document' | 'Non-Document'
 
-  carrier:         CarrierName
-  service_code:    string
-  status:          ShipmentStatus
-  sender:          ShipmentSender
-  receiver:        ShipmentReceiver
-  package:         ShipmentPackage
-  products?:       ShipmentProduct[]
+  // Carrier info
+  carrier?:      string
+  service_code?: string
+  service_name?: string
+  awb_no?:       string
+  tracking_no?:  string
+  label_url?:    string
+  invoice_url?:  string
+  price?:        number
+
+  // Sender & Receiver
+  sender:   Record<string, string>
+  receiver: Record<string, string>
+
+  // Packages & Products
+  packages: ShipmentPackageItem[]
+  products: ShipmentProductItem[]
+
+  // Details
+  invoice_no?:        string
+  invoice_date?:      string
+  duty_tax?:          string
   reason_for_export?: string
-  incoterms?:      'DDU' | 'DDP'
-  rate:            number
-  currency:        string
-  label_url?:      string
-  invoice_url?:    string         // new — invoice PDF URL
-  created_at:      string
-  updated_at:      string
+  notes?:             string
+  rejection_reason?:  string
+
+  // Tracking
+  tracking_events:      TrackingEvent[]
+  tracking_updated_at?: string
+
+  created_at: string
+  updated_at: string
+
+  // Embedded user — admin view only
+  user?: {
+    id:     string
+    name:   string
+    email:  string
+    phone?: string
+  }
 }
 
-// Booking response — POST /shipments/book
+// ── Manual Booking ───────────────────────────────────────────────
+export interface ManualBookingPayload {
+  goods_type:             'Document' | 'Non-Document'
+  reason_for_export:      'GIFT' | 'SALE' | 'SAMPLE' | 'RETURN' | 'PERSONAL_USE'
+  duty_tax:               'DDU' | 'DDP'
+  sender_name:            string
+  sender_address_line1:   string
+  sender_address_line2?:  string
+  sender_city:            string
+  sender_state:           string
+  sender_pincode:         string
+  sender_phone:           string
+  receiver_name:          string
+  receiver_address_line1: string
+  receiver_address_line2?: string
+  receiver_city:          string
+  receiver_state:         string
+  receiver_zipcode:       string
+  receiver_country_code:  string
+  receiver_phone:         string
+  packages:               ShipmentPackageItem[]
+  products?:              ShipmentProductItem[]
+  invoice_no?:            string
+  invoice_date?:          string
+  notes?:                 string
+}
+
+export interface ManualBookingResponse {
+  success:     boolean
+  aerotrek_id: string
+  status:      'pending_acceptance'
+  message:     string
+}
+
+// ── Auto Booking ─────────────────────────────────────────────────
+export interface BookShipmentPayload {
+  carrier:            CarrierName
+  service_code:       string
+  rate:               number
+  sender:             Record<string, string>
+  receiver:           Record<string, string>
+  package:            Partial<ShipmentPackageItem>
+  products?:          ShipmentProductItem[]
+  reason_for_export?: string
+  incoterms?:         'DDU' | 'DDP'
+}
+
 export interface BookingResponse {
   aerotrek_id:     string
   platform:        string
@@ -208,43 +311,41 @@ export interface BookingResponse {
   tracking_no:     string
   label_url:       string
   invoice_url?:    string
-  wallet_balance:  number         // updated balance after deduction
-  shipment:        Shipment       // full shipment object
+  wallet_balance:  number
+  shipment:        Shipment
 }
 
-export interface BookShipmentPayload {
-  carrier:            CarrierName
-  service_code:       string
-  rate:               number
-  sender:             ShipmentSender
-  receiver:           ShipmentReceiver
-  package:            ShipmentPackage
-  products?:          ShipmentProduct[]
-  reason_for_export?: string
-  incoterms?:         'DDU' | 'DDP'
+// ── Admin Payloads ───────────────────────────────────────────────
+export interface UpdateBookingPayload {
+  awb_no:           string
+  carrier:          string
+  service_name:     string
+  platform:         'overseas' | 'shiprocket'
+  platform_ref_id?: string
+  label_url?:       string
 }
 
-// ── Tracking ─────────────────────────────────────────────────────
-// GET /tracking/{identifier}
-// {identifier} can be: aerotrek_id | awb_no | platform_ref_id
-
-export interface TrackingEvent {
-  timestamp:   string
-  location?:   string
+export interface TrackingEventPayload {
   status:      string
   description: string
+  location?:   string
 }
 
-export interface TrackingResult {
-  // New fields
-  aerotrek_id:     string | null  // ATK-YYYYMMDD-XXXXXX
-  platform:        string         // 'overseas'
-  platform_ref_id: string | null
-  awb_no:          string | null  // actual carrier AWB
+export interface AdminManualOrdersStats {
+  pending_acceptance: number
+  accepted:           number
+  rejected:           number
+  booked_today:       number
+}
 
-  // Existing fields
+// ── Tracking Result ──────────────────────────────────────────────
+export interface TrackingResult {
+  aerotrek_id?:        string | null
+  platform?:           string
+  platform_ref_id?:    string | null
+  awb_no?:             string | null
   carrier:             string
-  service?:            string     // e.g. 'DHL Express'
+  service?:            string
   status:              ShipmentStatus
   estimated_delivery?: string
   origin?:             string
@@ -252,40 +353,24 @@ export interface TrackingResult {
   events:              TrackingEvent[]
 }
 
-// Helper — get the best display ID for a shipment
-// aerotrek_id if available, fallback to awb_no, then legacy awb
-export function getShipmentDisplayId(shipment: Partial<Shipment>): string {
-  return shipment.aerotrek_id ?? shipment.awb_no ?? shipment.awb ?? 'N/A'
-}
-
-// Helper — get platform display name
-export function getPlatformLabel(platform: string): string {
-  const labels: Record<string, string> = {
-    overseas:   'Overseas',
-    shiprocket: 'Shiprocket',
-    delhivery:  'Delhivery',
-  }
-  return labels[platform] ?? platform
-}
-
 // ── CMS ──────────────────────────────────────────────────────────
 export interface Page {
-  _id: string; title: string; slug: string; content: string
+  id: string; title: string; slug: string; content: string
   meta_title?: string; meta_description?: string
   is_published: boolean; created_at: string
 }
 
-export interface BlogCategory { _id: string; name: string; slug: string }
+export interface BlogCategory { id: string; name: string; slug: string }
 
 export interface BlogPost {
-  _id: string; title: string; slug: string
+  id: string; title: string; slug: string
   content?: string; excerpt?: string; featured_image?: string
   category_id?: string; is_published: boolean
   published_at?: string; created_at: string
 }
 
 export interface Faq {
-  _id: string; question: string; answer: string
+  id: string; question: string; answer: string
   category: 'shipping' | 'payment' | 'tracking' | 'general'
   order: number; is_published: boolean
 }
@@ -311,6 +396,7 @@ export interface SiteSettings {
 }
 
 export interface LandingHero        { headline: string; subtext: string; cta_primary: string; cta_secondary: string }
+export interface LandingHero        { headline: string; subtext: string; cta_primary: string; cta_secondary: string }
 export interface LandingStat        { value: string; label: string }
 export interface LandingFeature     { icon: string; title: string; desc: string }
 export interface LandingDestination { country: string; flag: string; transit: string }
@@ -318,17 +404,15 @@ export interface LandingTestimonial { name: string; role: string; text: string; 
 export interface LandingStep        { step: number; icon: string; title: string; desc: string }
 export interface LandingCtaBanner   { headline: string; subtext: string; cta_primary: string; cta_secondary: string }
 
-// ── Booking Form State ───────────────────────────────────────────
-export interface BookingFormState {
-  step:              number
-  selectedRate:      Rate | null
-  sender:            Partial<ShipmentSender>
-  receiver:          Partial<ShipmentReceiver>
-  packageDetails:    Partial<ShipmentPackage>
-  products:          ShipmentProduct[]
-  reason_for_export: string
-  incoterms:         'DDU' | 'DDP'
-  otp?:              string
+// ── Pagination ───────────────────────────────────────────────────
+export interface PaginatedData<T> {
+  data:         T[]
+  current_page: number
+  last_page:    number
+  per_page:     number
+  total:        number
+  from:         number
+  to:           number
 }
 
 // ── Admin ────────────────────────────────────────────────────────
@@ -341,13 +425,28 @@ export interface SettingItem {
   key: string; value: unknown; type: 'text' | 'image' | 'boolean' | 'json'
 }
 
-// ── Pagination ───────────────────────────────────────────────────
-export interface PaginatedData<T> {
-  data:         T[]
-  current_page: number
-  last_page:    number
-  per_page:     number
-  total:        number
-  from:         number
-  to:           number
+// ── Status config ────────────────────────────────────────────────
+export const STATUS_CONFIG: Record<ShipmentStatus, { label: string; color: string }> = {
+  pending_acceptance: { label: 'Awaiting Review',   color: 'bg-yellow-100 text-yellow-700'  },
+  accepted:           { label: 'Accepted',           color: 'bg-blue-100 text-blue-700'     },
+  rejected:           { label: 'Rejected',           color: 'bg-red-100 text-red-700'       },
+  pending:            { label: 'Pending',            color: 'bg-gray-100 text-gray-600'     },
+  booked:             { label: 'Booked',             color: 'bg-indigo-100 text-indigo-700' },
+  picked_up:          { label: 'Picked Up',          color: 'bg-teal-100 text-teal-700'    },
+  in_transit:         { label: 'In Transit',         color: 'bg-blue-100 text-blue-700'    },
+  out_for_delivery:   { label: 'Out for Delivery',   color: 'bg-orange-100 text-orange-700'},
+  delivered:          { label: 'Delivered',          color: 'bg-green-100 text-green-700'  },
+  failed:             { label: 'Failed',             color: 'bg-red-100 text-red-700'      },
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+export function getShipmentDisplayId(s: Partial<Shipment>): string {
+  return s.aerotrek_id ?? s.awb_no ?? s.id ?? 'N/A'
+}
+
+export function getPlatformLabel(platform: string): string {
+  const labels: Record<string, string> = {
+    overseas: 'Overseas', shiprocket: 'Shiprocket', delhivery: 'Delhivery',
+  }
+  return labels[platform] ?? platform
 }

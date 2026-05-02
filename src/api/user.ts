@@ -1,26 +1,35 @@
 import api from './axios'
-import type { ApiResponse, User, Address, AddressPayload } from '../types'
+
+// ── Profile ──────────────────────────────────────────────────────
+// GET /api/v1/user/profile → { user: UserResource }
+// PUT /api/v1/user/profile → { user: UserResource }
+// POST /api/v1/user/profile/avatar → { avatar_url: string }
 
 export const userApi = {
   getProfile: () =>
-    api.get<ApiResponse<{ user: User }>>('/user/profile'),
+    api.get('/user/profile'),
 
-  updateProfile: (payload: Partial<Pick<User, 'name' | 'phone' | 'company_name'>>) =>
-    api.put<ApiResponse<{ user: User }>>('/user/profile', payload),
+  updateProfile: (payload: { name?: string; phone?: string; company_name?: string }) =>
+    api.put('/user/profile', payload),
 
-  // Addresses
+  uploadAvatar: (form: FormData) =>
+    api.post('/user/profile/avatar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  // ── Addresses ──────────────────────────────────────────────────
   getAddresses: () =>
-    api.get<ApiResponse<{ addresses: Address[] }>>('/user/addresses'),
+    api.get('/user/addresses'),
 
-  createAddress: (payload: AddressPayload) =>
-    api.post<ApiResponse<{ address: Address }>>('/user/addresses', payload),
+  createAddress: (payload: any) =>
+    api.post('/user/addresses', payload),
 
-  updateAddress: (id: string, payload: Partial<AddressPayload>) =>
-    api.put<ApiResponse<{ address: Address }>>(`/user/addresses/${id}`, payload),
+  updateAddress: (id: string, payload: any) =>
+    api.put(`/user/addresses/${id}`, payload),
 
   deleteAddress: (id: string) =>
-    api.delete<ApiResponse>(`/user/addresses/${id}`),
+    api.delete(`/user/addresses/${id}`),
 
   setDefaultAddress: (id: string) =>
-    api.put<ApiResponse<{ address: Address }>>(`/user/addresses/${id}/default`),
+    api.put(`/user/addresses/${id}/default`),
 }

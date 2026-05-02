@@ -32,6 +32,7 @@ api.interceptors.response.use(
 
     if (status === 401) {
       localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem('aerotrek-auth') // clear Zustand persist so token doesn't survive reload
       window.location.href = '/login'
       return Promise.reject(error)
     }

@@ -14,22 +14,24 @@ const CmsPage       = lazy(() => import('../pages/CmsPage'))
 const NotFound      = lazy(() => import('../pages/NotFound'))
 
 // Dashboard
-const DashboardLayout  = lazy(() => import('../components/dashboard/DashboardLayout'))
-const DashboardHome    = lazy(() => import('../pages/dashboard/DashboardHome'))
-const MyShipments      = lazy(() => import('../pages/dashboard/MyShipments'))
-const BookShipment     = lazy(() => import('../pages/dashboard/BookShipment'))
-const TrackShipment    = lazy(() => import('../pages/dashboard/TrackShipment'))
-const Wallet           = lazy(() => import('../pages/dashboard/Wallet'))
-const KycVerification  = lazy(() => import('../pages/dashboard/KycVerification'))
-const AddressBook      = lazy(() => import('../pages/dashboard/AddressBook'))
-const Profile          = lazy(() => import('../pages/dashboard/Profile'))
+const DashboardLayout = lazy(() => import('../components/dashboard/DashboardLayout'))
+const DashboardHome   = lazy(() => import('../pages/dashboard/DashboardHome'))
+const MyShipments     = lazy(() => import('../pages/dashboard/MyShipments'))
+const BookShipment    = lazy(() => import('../pages/dashboard/BookShipment'))
+const TrackShipment   = lazy(() => import('../pages/dashboard/TrackShipment'))
+const Wallet          = lazy(() => import('../pages/dashboard/Wallet'))
+const KycVerification = lazy(() => import('../pages/dashboard/KycVerification'))
+const AddressBook     = lazy(() => import('../pages/dashboard/AddressBook'))
+const Profile         = lazy(() => import('../pages/dashboard/Profile'))
 
 // Admin
-const AdminLayout    = lazy(() => import('../pages/admin/AdminLayout'))
-const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'))
-const KycManagement  = lazy(() => import('../pages/admin/KycManagement'))
-const AllShipments   = lazy(() => import('../pages/admin/AllShipments'))
-const CmsManager     = lazy(() => import('../pages/admin/CmsManager'))
+const AdminLayout      = lazy(() => import('../pages/admin/AdminLayout'))
+const AdminDashboard   = lazy(() => import('../pages/admin/AdminDashboard'))
+const KycManagement    = lazy(() => import('../pages/admin/KycManagement'))
+const AllShipments     = lazy(() => import('../pages/admin/AllShipments'))
+const CmsManager       = lazy(() => import('../pages/admin/CmsManager'))
+const ManualOrders     = lazy(() => import('../pages/admin/ManualOrders'))
+const PlatformSettings = lazy(() => import('../pages/admin/PlatformSettings'))
 
 // ── Guards ────────────────────────────────────────────────────────
 function ProtectedRoute() {
@@ -41,9 +43,9 @@ function ProtectedRoute() {
 
 function AdminRoute() {
   const { token, user, isHydrated } = useAuthStore()
-  if (!isHydrated)              return <PageLoader />
-  if (!token)                   return <Navigate to="/login"    replace />
-  if (!user?.is_admin)          return <Navigate to="/dashboard" replace />
+  if (!isHydrated)     return <PageLoader />
+  if (!token)          return <Navigate to="/login"    replace />
+  if (!user?.is_admin) return <Navigate to="/dashboard" replace />
   return <Suspense fallback={<PageLoader />}><Outlet /></Suspense>
 }
 
@@ -105,10 +107,12 @@ export const router = createBrowserRouter([
             path: 'admin',
             element: <AdminLayout />,
             children: [
-              { index: true,       element: <AdminDashboard /> },
-              { path: 'kyc',       element: <KycManagement /> },
-              { path: 'shipments', element: <AllShipments /> },
-              { path: 'cms',       element: <CmsManager /> },
+              { index: true,          element: <AdminDashboard /> },
+              { path: 'kyc',          element: <KycManagement /> },
+              { path: 'shipments',    element: <AllShipments /> },
+              { path: 'manual-orders',element: <ManualOrders /> },
+              { path: 'cms',          element: <CmsManager /> },
+              { path: 'platforms',    element: <PlatformSettings /> },
             ],
           },
         ],
